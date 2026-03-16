@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import math
 import os
+import traceback
 from functools import lru_cache
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 
@@ -146,21 +148,41 @@ def health() -> dict[str, Any]:
 
 @app.get("/probe")
 def probe() -> dict[str, Any]:
-    return build_similarity_report(DEFAULT_PROBE_GROUPS)
+    try:
+        return build_similarity_report(DEFAULT_PROBE_GROUPS)
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": str(exc),
+                "type": exc.__class__.__name__,
+                "trace": traceback.format_exc().splitlines()[-20:],
+            },
+        )
 
 
 @app.post("/embed")
 def embed(request: EmbedRequest) -> dict[str, Any]:
-    encoded = encode_texts(request.texts)
-    response = {
-        "model": MODEL_NAME,
-        "dimension": encoded["dimension"],
-        "texts": request.texts,
-        "sparse_preview": {
-            request.texts[index]: encoded["sparse_preview"][index]
-            for index in range(len(request.texts))
-        },
-    }
-    if request.include_vectors:
-        response["dense_vectors"] = encoded["dense_vectors"]
-    return response
+    try:
+        encoded = encode_texts(request.texts)
+        response = {
+            "model": MODEL_NAME,
+            "dimension": encoded["dimension"],
+            "texts": request.texts,
+            "sparse_preview": {
+                request.texts[index]: encoded["sparse_preview"][index]
+                for index in range(len(request.texts))
+            },
+        }
+        if request.include_vectors:
+            response["dense_vectors"] = encoded["dense_vectors"]
+        return response
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": str(exc),
+                "type": exc.__class__.__name__,
+                "trace": traceback.format_exc().splitlines()[-20:],
+            },
+        )
