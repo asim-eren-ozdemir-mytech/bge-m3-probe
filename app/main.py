@@ -26,12 +26,21 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     return dot / (left_norm * right_norm)
 
 
-def top_sparse_tokens(model: Any, lexical_weights: dict[int, float], limit: int = 8) -> list[dict[str, Any]]:
+def top_sparse_tokens(model: Any, lexical_weights: Any, limit: int = 8) -> list[dict[str, Any]]:
+    if not isinstance(lexical_weights, dict) or not lexical_weights:
+        return []
+
+    tokenizer = getattr(model, "tokenizer", None)
+    if tokenizer is None:
+        return []
+
     tokens = []
-    tokenizer = model.tokenizer
     sorted_items = sorted(lexical_weights.items(), key=lambda item: item[1], reverse=True)[:limit]
     for token_id, weight in sorted_items:
-        token = tokenizer.convert_ids_to_tokens([int(token_id)])[0]
+        try:
+            token = tokenizer.convert_ids_to_tokens([int(token_id)])[0]
+        except Exception:
+            token = str(token_id)
         tokens.append({"token": token, "weight": round(float(weight), 6)})
     return tokens
 
@@ -57,8 +66,11 @@ def encode_texts(texts: list[str]) -> dict[str, Any]:
         [float(value) for value in vector]
         for vector in encoded["dense_vecs"]
     ]
-    sparse_vectors = encoded["lexical_weights"]
-    sparse_preview = [top_sparse_tokens(model, weights) for weights in sparse_vectors]
+    sparse_vectors = encoded.get("lexical_weights") or [{} for _ in texts]
+    try:
+        sparse_preview = [top_sparse_tokens(model, weights) for weights in sparse_vectors]
+    except Exception:
+        sparse_preview = [[] for _ in texts]
     return {
         "dense_vectors": dense_vectors,
         "sparse_preview": sparse_preview,
